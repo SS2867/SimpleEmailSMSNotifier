@@ -312,16 +312,6 @@ def target_selected_action(sender, subject, mail_body ):
             utils.logging(f"[Error] {config.MAIL_GPTERRORMESSAGE(time.time(), str(e))}")
     #threading.Thread(target=request_GPT_and_send, args=(config.GPT_SYSTEM_PROMPT, 0.8, 300)).start()
     threading.Thread(target=request_GPT_and_send, args=(config.GPT_SYSTEM_PROMPT_INSTANT, 0.5, 100)).start()
-    try:
-        WebDav_Session = WebDav_Service()
-        WebDav_Session.download(config.REMOTE_PATH, config.LOCAL_PATH)
-        IoT_conf = utils.Config(config.LOCAL_PATH)
-        IoT_conf.set("NOTIFICATION_FLAG", "mail_notification", True)
-        WebDav_Session.upload(config.REMOTE_PATH, config.LOCAL_PATH)
-    except Exception as e:
-        threading.Thread(target=SMTP_Service, args=(config.EMAIL_DEFAULT_TO,
-            config.MAIL_WEBDAVERRORMESSAGE(time.time(), str(e)))).start()
-        utils.logging(f"[Error] {config.MAIL_WEBDAVERRORMESSAGE(time.time(), str(e))}")
 
 
 def target_email_selector(sender, subject, text):
@@ -388,6 +378,10 @@ def request_GPT(system="", user="", max_tokens=400, temperature=0.7, top_p=0.3):
 
 def send_sms(to, body, use=config.SMS_DEFAULT_USE, timing=[0], ascii_only=False):
     response = []
+    """
+    This function is written specially for Twilio api SMS service,
+    You may need to build the code specifically for your service.
+    """
     if ascii_only:
         body = "".join([i if i.isascii() else "^" for i in body])
     for i in range(0, max(timing)+1):
@@ -395,7 +389,8 @@ def send_sms(to, body, use=config.SMS_DEFAULT_USE, timing=[0], ascii_only=False)
             time.sleep(1)
             continue
         utils.logging(f"SMS requesting.")
-        url = 'https://api.twilio.com/2010-04-01/Accounts/ACa22966d40518cb843736591a51345b3b/Messages.json'
+        url = f'https://api.twilio.com/2010-04-01/Accounts/{config.CALL_ACCOUNT_ID}/Messages.json'
+        config.CALL_ACCOUNT_ID
         data = {
             'To': to,
             'From': use,
@@ -413,6 +408,11 @@ def send_sms(to, body, use=config.SMS_DEFAULT_USE, timing=[0], ascii_only=False)
 def make_call(to,
               content='http://demo.twilio.com/docs/voice.xml',
               use=config.CALL_DEFAULT_USE):
+    """
+    This function is written specially for Twilio api phone calling service,
+    You may need to install relevant library (and uncomment the following lines)
+    or build the code specifically for your service.
+    """
     utils.logging(f"Phone call requesting.")
     #client = Client(config.CALL_ACCOUNT_ID,
     #    decrypt(config.CALL_ACCOUNT_PW, config.CALL_ACCOUNT_PW_KEY))
