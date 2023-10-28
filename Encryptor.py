@@ -3,10 +3,7 @@
 # Purpose:     Encrypt and decrypt data using a symmetric self-designed
 #              cryptographic algorithm
 #
-# Author:      Steven Song
-#              SONG Zelin
-#              21098088D
-#              in ENG2002 Group 1002 LEC001, Team 18
+# Author:
 #
 # Created:     30/10/2022
 # Copyright:   (c) Steven Song 2022
