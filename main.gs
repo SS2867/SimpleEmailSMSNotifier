@@ -1,3 +1,7 @@
+// ====== Start of Config ======
+const SCAN_INTERVAL = 5000;    // in ms
+const SCRIPT_TRIGGER_INTERVAL = 60000;  // in ms
+
 const TARGET_SENDER_LIST = [
     "vip1@example.com",
     "vip2@example.com",
@@ -58,24 +62,27 @@ Use the following template:
 Regards,
 xxx
 \`\`\``;
-API2D_ACCOUNT_CREDENTIAL = 'tc*4!5$V9cxaLaa8apWa3uO2THgQlwQku8Td*PU7i';
-API2D_ACCOUNT_CREDENTIAL_KEY = "EZ2l5UhL";
-SMS_ACCOUNT_ID = 'AC51ace336390d71448e0fda078efa6ca4';
-SMS_ACCOUNT_PW = "1GtlY0*bUjY7z!QCffcPGEI#TQXoiiao";
-SMS_ACCOUNT_PW_KEY = "ywX73q14";
-SMS_DEFAULT_USE = "+18788882394";
-SMS_SENDING_TO = ["+85256971520", "+85298222438"];
-CALL_DEFAULT_USE = "+18788882394";
-CALL_TO = ["+85256971520", "+85298222438"];
-CALL_ACCOUNT_ID = 'AC51ace336390d71448e0fda078efa6ca4';
-CALL_ACCOUNT_PW = "1GtlY0*bUjY7z!QCffcPGEI#TQXoiiao";
-CALL_ACCOUNT_PW_KEY = "ywX73q14";
+const CHATBOT_RESPONSE_POST_PROCESS = (x) => {return x.replaceAll("xxx", "Your Name")};
+const API2D_ACCOUNT_CREDENTIAL = 'tc*4!5$V9cxaLaa8apWa3uO2THgQlwQku8Td*PU7i';
+const API2D_ACCOUNT_CREDENTIAL_KEY = "EZ2l5UhL";
+const SMS_ACCOUNT_ID = 'AC51ace336390d71448e0fda078efa6ca4';
+const SMS_ACCOUNT_PW = "1GtlY0*bUjY7z!QCffcPGEI#TQXoiiao";
+const SMS_ACCOUNT_PW_KEY = "ywX73q14";
+const SMS_DEFAULT_USE = "+1888123456";
+const SMS_SENDING_TO = ["+85291234567", "+85298765432"];
+const CALL_DEFAULT_USE = "+1888123456";
+const CALL_TO = ["+85291234567", "+85298765432"];
+const CALL_ACCOUNT_ID = 'AC51ace336390d71448e0fda078efa6ca4';
+const CALL_ACCOUNT_PW = "1GtlY0*bUjY7z!QCffcPGEI#TQXoiiao";
+const CALL_ACCOUNT_PW_KEY = "ywX73q14";
+
+// ====== End of Config ======
 
 function checkUnreadEmails() {
   var scriptStartTime = new Date().getTime();
-  var durationLimit = 58000;    // in ms
+  var durationLimit = SCRIPT_TRIGGER_INTERVAL - 2000;    // in ms
 
-  for (var i = 0; i < 12; i++) {
+  while (true){ //for (var i = 0; i < 12; i++) {
     var scanStartTime = new Date().getTime();
 
     if (new Date().getTime() - scriptStartTime > durationLimit) { break;}  // Check whether exceed duration Limit
@@ -105,7 +112,7 @@ function checkUnreadEmails() {
     });
 
     Logger.log(`Scan complete in ${new Date().getTime()-scanStartTime}ms`);
-    Utilities.sleep(5000 - (new Date().getTime()-scanStartTime));
+    Utilities.sleep(SCAN_INTERVAL - (new Date().getTime()-scanStartTime));
   }
 }
 
@@ -121,7 +128,7 @@ function targetSelectedAction(from_, subject, body){
   for (i of SMS_SENDING_TO){ sendSMS(i, SMS_PREMESSAGE(subject), SMS_DEFAULT_USE, [0], true);  }
   for (i of CALL_TO){ makeCall(CALL_DEFAULT_USE, i);  }
   var botResponse = requestChatBot(CHATBOT_SYSTEM_PROMPT, body) .choices[0].message.content;
-  sendEmail(EMAIL_DEFAULT_TO, "", botResponse);
+  sendEmail(EMAIL_DEFAULT_TO, "", CHATBOT_RESPONSE_POST_PROCESS(botResponse));
 }
 
 function sendEmail(to, subject, body) {
