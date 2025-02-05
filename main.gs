@@ -90,21 +90,23 @@ function checkUnreadEmails() {
     Logger.log("Scanning");
     
     // Get unread emails (latest 3 unreads)
-    var threads = GmailApp.getInboxThreads(0, 6);
-    var unreadThreads = threads.filter(thread => thread.isUnread()).slice(0, 3);
+    //var threads = GmailApp.getInboxThreads(0, 6);
+    //var unreadThreads = threads.filter(thread => thread.isUnread()).slice(0, 3);
+    var unreadThreads = GmailApp.search('is:unread', 0, 2);
 
     unreadThreads.forEach(thread => {
       var messages = thread.getMessages();
       messages.forEach(message => {
         if (!message.isRead) {
-          var SUBJECT = message.getSubject();
-          var BODY = message.getBody();
-          var FROM =  message.getFrom();
-          var TO = message.getTo();
+          var subject = message.getSubject();
+          var body = message.getBody();
+          var from_ =  message.getFrom();
+          var to = message.getTo();
           
-          //console.log(`${SUBJECT} ${BODY} ${FROM} ${TO}`);
-          if (targetEmailSelector(FROM, TO, BODY, SUBJECT)){
-            targetSelectedAction(FROM, SUBJECT, BODY);
+          console.log(`Unread email: ${from_} | ${subject.slice(0,40)} | ` +
+            `${body.slice(0,40).replaceAll("\n", "\\n")}`);
+          if (targetEmailSelector(from_, to, body, subject)){
+            targetSelectedAction(from_, subject, body);
           } 
           message.markRead();
         }
@@ -112,7 +114,7 @@ function checkUnreadEmails() {
     });
 
     Logger.log(`Scan complete in ${new Date().getTime()-scanStartTime}ms`);
-    Utilities.sleep(SCAN_INTERVAL - (new Date().getTime()-scanStartTime));
+    Utilities.sleep(Math.max(1000, SCAN_INTERVAL - (new Date().getTime()-scanStartTime)));
   }
 }
 
@@ -197,7 +199,10 @@ function requestChatBot(system = "", user = "", maxTokens = 400, temperature = 0
       var data = JSON.parse(response.getContentText()); // Parse the JSON response
       const assistant = data.choices[0].message.content;
       const usage = data.usage || {};
-      Logger.log(assistant);
+      Logger.log(`Chatbot API requested. System: \`${system.slice(0,70).replaceAll("\n", "\\n")}\`, ` +
+        `User: \`${user.slice(0,70).replaceAll("\n", "\\n")}\`, max_tokens=${maxTokens}, ` +
+        `temperature=${temperature}, topP=${topP}, ` +
+        `Response: \`${assistant.slice(0,70).replaceAll("\n", "\\n")}\`, usage=${usage}`);
       return data;
   } catch (error) {
       console.error("Error making request:", error);
@@ -231,7 +236,8 @@ function sendSMS(to, body, use, timing = [0], asciiOnly = false) {
     };
     const res = UrlFetchApp.fetch(url, options);
     response.push(res.getContentText());
-    Logger.log(`SMS <${body.substring(0, 40)}> requested. length=${body.length}.`);
+    Logger.log(`SMS <${body.substring(0, 40).replaceAll("\n", "\\n")}> requested to ${to}. ` + 
+      `length=${body.length}.`);
 
     if (i !== Math.max(...timing)) {Utilities.sleep(1000); }
   }
@@ -241,6 +247,7 @@ function sendSMS(to, body, use, timing = [0], asciiOnly = false) {
 function makeCall(from_, to, content = "http://demo.twilio.com/docs/voice.xml") {
   const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${CALL_ACCOUNT_ID}/Calls.json`;
   const payload ={From: from_,  To: to, Url: content};
+  Logger.log(`Call to ${to} requesting.`);
   try {
     const response = UrlFetchApp.fetch(twilioUrl, {
       'method': 'POST',
@@ -250,7 +257,7 @@ function makeCall(from_, to, content = "http://demo.twilio.com/docs/voice.xml") 
       },
       'payload': payload
     });
-    Logger.log(response);
+    Logger.log(`Call to ${to} successfully requested.`);
     return response;
   } catch (error) {
     console.error("Error making the call:", error);
