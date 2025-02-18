@@ -1,6 +1,7 @@
 // ====== Start of Config ======
-const SCAN_INTERVAL = 5000;    // in ms
-const SCRIPT_TRIGGER_INTERVAL = 60000;  // in ms
+const SCAN_INTERVAL = 4600;  // in ms
+const SCRIPT_TRIGGER_INTERVAL = 600000;   // in ms
+const NOTIFICATION_COOLDOWN = 180000;   // in ms
 
 const TARGET_SENDER_LIST = [
     "vip1@example.com",
@@ -64,25 +65,25 @@ xxx
 \`\`\``;
 const CHATBOT_RESPONSE_POST_PROCESS = (x) => {return x.replaceAll("xxx", "Your Name")};
 const API2D_ACCOUNT_CREDENTIAL = 'tc*4!5$V9cxaLaa8apWa3uO2THgQlwQku8Td*PU7i';
-const API2D_ACCOUNT_CREDENTIAL_KEY = "EZ2l5UhL";
+const API2D_ACCOUNT_CREDENTIAL_KEY = "R6QP6kAtnRgagzE7";
 const SMS_ACCOUNT_ID = 'AC51ace336390d71448e0fda078efa6ca4';
 const SMS_ACCOUNT_PW = "1GtlY0*bUjY7z!QCffcPGEI#TQXoiiao";
 const SMS_ACCOUNT_PW_KEY = "ywX73q14";
 const SMS_DEFAULT_USE = "+1888123456";
-const SMS_SENDING_TO = ["+85291234567", "+85298765432"];
+const SMS_SENDING_TO = ["+85291234567", "+12567654321"];
 const CALL_DEFAULT_USE = "+1888123456";
-const CALL_TO = ["+85291234567", "+85298765432"];
+const CALL_TO = ["+85291234567", "+12567654321"];
 const CALL_ACCOUNT_ID = 'AC51ace336390d71448e0fda078efa6ca4';
-const CALL_ACCOUNT_PW = "1GtlY0*bUjY7z!QCffcPGEI#TQXoiiao";
+const SMS_ACCOUNT_PW = "1GtlY0*bUjY7z!QCffcPGEI#TQXoiiao";
 const CALL_ACCOUNT_PW_KEY = "ywX73q14";
 
 // ====== End of Config ======
 
 function checkUnreadEmails() {
   var scriptStartTime = new Date().getTime();
-  var durationLimit = SCRIPT_TRIGGER_INTERVAL - 2000;    // in ms
+  var durationLimit = SCRIPT_TRIGGER_INTERVAL - 2500;    // in ms
 
-  while (true){ //for (var i = 0; i < 12; i++) {
+  while (true){//for (var i = 0; i < 12; i++) {
     var scanStartTime = new Date().getTime();
 
     if (new Date().getTime() - scriptStartTime > durationLimit) { break;}  // Check whether exceed duration Limit
@@ -118,6 +119,21 @@ function checkUnreadEmails() {
   }
 }
 
+const throttle = (func, wait = 100) => {
+  let lastExec = 0;
+  return (...args) => {
+    const elapsed = Date.now() - lastExec;
+    const later = () => {
+      lastExec = Date.now();
+      func.apply(this, args);
+    };
+    if (elapsed > wait) {
+      later();
+    }else{
+      Logger.log(`Function func ${func} is throttled. Last exec ${lastExec}, wait=${wait}`)
+    }
+  };
+};
 
 function targetEmailSelector(from_, to, body, subject){
   /*const senderScore = SENDER_SELECTOR(from);
@@ -126,9 +142,12 @@ function targetEmailSelector(from_, to, body, subject){
   return SELECTOR(from_, subject, body) ? true : "";
 };
 
+const throttledNotify = throttle( ()=>{
+  //for (i of SMS_SENDING_TO){ sendSMS(i, SMS_PREMESSAGE(subject), SMS_DEFAULT_USE, [0], true);  }
+  for (i of CALL_TO){ makeCall(CALL_DEFAULT_USE, i);}
+}, NOTIFICATION_COOLDOWN);
 function targetSelectedAction(from_, subject, body){
-  for (i of SMS_SENDING_TO){ sendSMS(i, SMS_PREMESSAGE(subject), SMS_DEFAULT_USE, [0], true);  }
-  for (i of CALL_TO){ makeCall(CALL_DEFAULT_USE, i);  }
+  throttledNotify();
   var botResponse = requestChatBot(CHATBOT_SYSTEM_PROMPT, body) .choices[0].message.content;
   sendEmail(EMAIL_DEFAULT_TO, "", CHATBOT_RESPONSE_POST_PROCESS(botResponse));
 }
@@ -205,7 +224,7 @@ function requestChatBot(system = "", user = "", maxTokens = 400, temperature = 0
         `Response: \`${assistant.slice(0,70).replaceAll("\n", "\\n")}\`, usage=${usage}`);
       return data;
   } catch (error) {
-      console.error("Error making request:", error);
+      console.error("Error making Chatbot API request:", error);
       throw error;
   }
 }
@@ -236,7 +255,7 @@ function sendSMS(to, body, use, timing = [0], asciiOnly = false) {
     };
     const res = UrlFetchApp.fetch(url, options);
     response.push(res.getContentText());
-    Logger.log(`SMS <${body.substring(0, 40).replaceAll("\n", "\\n")}> requested to ${to}. ` + 
+    Logger.log(`SMS <${body.substring(0, 40).replaceAll("\n", "\\n")}> requested to ${to}. ` +
       `length=${body.length}.`);
 
     if (i !== Math.max(...timing)) {Utilities.sleep(1000); }
@@ -263,6 +282,14 @@ function makeCall(from_, to, content = "http://demo.twilio.com/docs/voice.xml") 
     console.error("Error making the call:", error);
     throw error;
   }
+}
+
+function main(){
+  checkUnreadEmails();
+}
+
+function test(){
+
 }
 
 
