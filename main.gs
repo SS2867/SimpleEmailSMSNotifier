@@ -1,6 +1,14 @@
 // ====== Start of Config ======
-const SCAN_INTERVAL = 4600;  // in ms
-const SCRIPT_TRIGGER_INTERVAL = 600000;   // in ms
+const SCAN_INTERVAL = {     // "hh:mm-hh:mm" or "default": interval in ms, cross day allowed
+    "00:30-07:30": 30000,
+    "07:30-08:30": 8000,
+    "08:30-18:15": 2750,    
+    "18:15-22:30": 4000,
+    "22:30-00:30": 6000,
+    "default": 5000
+};
+const TIMEZONE_OFFSET = -4;  
+const SCRIPT_TRIGGER_INTERVAL = 60000;   // in ms
 const NOTIFICATION_COOLDOWN = 180000;   // in ms
 
 const TARGET_SENDER_LIST = [
@@ -78,10 +86,12 @@ const SMS_ACCOUNT_PW = "1GtlY0*bUjY7z!QCffcPGEI#TQXoiiao";
 const CALL_ACCOUNT_PW_KEY = "ywX73q14";
 
 // ====== End of Config ======
-
 function checkUnreadEmails() {
   var scriptStartTime = new Date().getTime();
-  var durationLimit = SCRIPT_TRIGGER_INTERVAL - 2500;    // in ms
+  var durationLimit = SCRIPT_TRIGGER_INTERVAL - Math.min(2500, getScanInterval()*0.6);    // in ms
+
+  Logger.log(PropertiesService.getUserProperties().getProperties());
+  Logger.log(`Approx ${Math.ceil(calculateDailyScans())} scans per day under current scan interval setting. Current scan interval: ${getScanInterval()}ms`)
 
   while (true){//for (var i = 0; i < 12; i++) {
     var scanStartTime = new Date().getTime();
@@ -115,11 +125,58 @@ function checkUnreadEmails() {
     });
 
     Logger.log(`Scan complete in ${new Date().getTime()-scanStartTime}ms`);
-    Utilities.sleep(Math.max(1000, SCAN_INTERVAL - (new Date().getTime()-scanStartTime)));
+    Utilities.sleep(Math.max(1000, getScanInterval() - (new Date().getTime()-scanStartTime)));
   }
 }
 
-const throttle = (func, wait = 100) => {
+function parseTimeToMinutes(timeStr) {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    return hours * 60 + minutes;
+}
+function getTimeWindowBoundaries(period) {
+    const [startStr, endStr] = period.split('-');
+    const startMin = parseTimeToMinutes(startStr);
+    let endMin = parseTimeToMinutes(endStr);
+    if (endMin <= startMin) endMin += 1440; // 24h, cross-day window check
+    return { startMin, endMin };
+}
+function getScanInterval(timestamp = Date.now()) {
+    const date = new Date(timestamp + TIMEZONE_OFFSET * 3600000);
+    const currentMin = date.getUTCHours() * 60 + date.getUTCMinutes();
+    const virtualMin = currentMin + 1440; //  cross-day window check
+    for (const [period, interval] of Object.entries(SCAN_INTERVAL)) {
+        if (period === 'default') continue;
+        const { startMin, endMin } = getTimeWindowBoundaries(period);
+        if ( currentMin>=startMin && currentMin<endMin  ||  virtualMin >= startMin && virtualMin < endMin) return interval;
+    }
+    return SCAN_INTERVAL.default;
+}
+function calculateDailyScans() {
+    let total = 0;
+    const coverage = new Array(1440).fill(false); // check whole-day coverage
+    for (const [period, interval] of Object.entries(SCAN_INTERVAL)) {
+        if (period === 'default') continue;
+        const { startMin, endMin } = getTimeWindowBoundaries(period);
+        total += Math.ceil((endMin-startMin) * 60000) / interval;
+        for (let t = startMin; t < endMin; t++) {coverage[t % 1440] = true;}
+    }
+    const missing = coverage.reduce((acc, val, idx) => {
+        if (!val) acc.push(idx);
+        return acc;
+    }, []);
+    if (missing.length > 0) {    // non whole-day coverage alert
+        msg = `Uncovered minutes detected: ${missing.length} minutes`;
+        if (missing.length<=10 || !SCAN_INTERVAL.default){ 
+          msg += `: ${Array.from(missing.map(i => Math.floor(i/60)+":"+i%60)).join(", ")}`;
+        }
+        if(SCAN_INTERVAL.default){Logger.log(msg);}
+        else{throw msg;}
+    }
+    if (SCAN_INTERVAL.default) total += Math.ceil((missing.length * 60000) / SCAN_INTERVAL.default);
+    return total
+}
+
+/*const throttle = (func, wait = 100) => {
   let lastExec = 0;
   return (...args) => {
     const elapsed = Date.now() - lastExec;
@@ -131,6 +188,19 @@ const throttle = (func, wait = 100) => {
       later();
     }else{
       Logger.log(`Function func ${func} is throttled. Last exec ${lastExec}, wait=${wait}`)
+    }
+  };
+};*/
+const throttle = (func, wait = 100, propKey = 'throttle_last_exec') => {
+  return (...args) => {
+    const properties = PropertiesService.getUserProperties();
+    const lastExec = Number(properties.getProperty(propKey)) || 0;
+    const elapsed = Date.now() - lastExec;
+    if (elapsed > wait) {
+      func.apply(this, args);
+      properties.setProperty(propKey, Date.now().toString());
+    } else {
+      Logger.log(`Function ${func.name} throttled. Last exec ${lastExec}, required wait ${wait}`);
     }
   };
 };
@@ -145,7 +215,8 @@ function targetEmailSelector(from_, to, body, subject){
 const throttledNotify = throttle( ()=>{
   //for (i of SMS_SENDING_TO){ sendSMS(i, SMS_PREMESSAGE(subject), SMS_DEFAULT_USE, [0], true);  }
   for (i of CALL_TO){ makeCall(CALL_DEFAULT_USE, i);}
-}, NOTIFICATION_COOLDOWN);
+}, NOTIFICATION_COOLDOWN, "throttle_last_exec_notify");
+
 function targetSelectedAction(from_, subject, body){
   throttledNotify();
   var botResponse = requestChatBot(CHATBOT_SYSTEM_PROMPT, body) .choices[0].message.content;
@@ -289,7 +360,7 @@ function main(){
 }
 
 function test(){
-
+  
 }
 
 
