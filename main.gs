@@ -86,14 +86,43 @@ const SMS_ACCOUNT_PW = "1GtlY0*bUjY7z!QCffcPGEI#TQXoiiao";
 const CALL_ACCOUNT_PW_KEY = "ywX73q14";
 
 // ====== End of Config ======
+
+userProps = PropertiesService.getUserProperties();
+propsCache = userProps.getProperties();
+
 function checkUnreadEmails() {
   var scriptStartTime = new Date().getTime();
   var durationLimit = SCRIPT_TRIGGER_INTERVAL - Math.min(2500, getScanInterval()*0.6);    // in ms
 
-  Logger.log(PropertiesService.getUserProperties().getProperties());
+  
+  console.log(truncateDictValues(propsCache, 200));
   Logger.log(`Approx ${Math.ceil(calculateDailyScans())} scans per day under current scan interval setting. Current scan interval: ${getScanInterval()}ms`)
 
-  while (true){//for (var i = 0; i < 12; i++) {
+  var now = new Date();  var currentDate = now.getDate();
+  var currentMinuteOfDay = now.getHours() * 60 + now.getMinutes();
+  var scanStatsDateStr = propsCache["scanStatsDate"];
+  var scanStatsScanStr = propsCache["scanStatsScan"];
+  var scanStatsReadStr = propsCache["scanStatsRead"];
+  var scanStatsDate = scanStatsDateStr ? JSON.parse(scanStatsDateStr) : [];
+  var scanStatsScan = scanStatsScanStr ? JSON.parse(scanStatsScanStr) : [];
+  var scanStatsRead = scanStatsReadStr ? JSON.parse(scanStatsReadStr) : [];
+  [scanStatsDate, scanStatsScan ,scanStatsRead].forEach((list)=>{
+    for (var i = 0; i < 1440; i++) {if (!list[i]) {list[i] = 0;}} 
+  })
+  var total24h = scanStatsScan.reduce((sum, entry) => {return sum + (entry);}, 0);
+  var total24hReads = scanStatsRead.reduce((sum, entry) => {return sum + (entry);}, 0);
+  var startMinute = currentMinuteOfDay - 59; var total1h = 0; var total1hReads = 0;
+  if (startMinute < 0) {
+    startMinute += 1440;
+    for (var m = startMinute; m < 1440; m++) {
+      total1h += scanStatsScan[m]; total1hReads += scanStatsRead[m]; }
+    for (var m = 0; m <= currentMinuteOfDay; m++) {
+      total1h += scanStatsScan[m]; total1hReads += scanStatsRead[m]; }
+  } else {for (var m = startMinute; m <= currentMinuteOfDay; m++) {
+    total1h += scanStatsScan[m]; total1hReads += scanStatsRead[m]; }}
+  Logger.log(`Number of scans in the past 24h: ${total24h} times (plus ${total24hReads} reads). Past 1h: ${total1h} times (plus ${total1hReads} reads).`);
+
+  while (true){
     var scanStartTime = new Date().getTime();
 
     if (new Date().getTime() - scriptStartTime > durationLimit) { break;}  // Check whether exceed duration Limit
@@ -105,10 +134,20 @@ function checkUnreadEmails() {
     //var unreadThreads = threads.filter(thread => thread.isUnread()).slice(0, 3);
     var unreadThreads = GmailApp.search('is:unread', 0, 2);
 
+    var scanTime = new Date(); var scanDate = scanTime.getDate();
+    var scanMinute = scanTime.getHours() * 60 + scanTime.getMinutes();
+    if (!scanStatsDate[scanMinute] || scanStatsDate[scanMinute] !== scanDate) {
+      scanStatsDate[scanMinute] = scanDate; scanStatsScan[scanMinute] = 0;scanStatsRead[scanMinute] = 0;
+    } else {scanStatsScan[scanMinute] ++; }
+    
     unreadThreads.forEach(thread => {
+      scanStatsRead[scanMinute]++;
+
       var messages = thread.getMessages();
       messages.forEach(message => {
         if (!message.isRead) {
+          scanStatsRead[scanMinute]++;
+          
           var subject = message.getSubject();
           var body = message.getBody();
           var from_ =  message.getFrom();
@@ -122,9 +161,22 @@ function checkUnreadEmails() {
           message.markRead();
         }
       });
-    });
 
+    });
+    
+    propsCache["scanStatsDate"] = JSON.stringify(scanStatsDate);
+    propsCache["scanStatsScan"] = JSON.stringify(scanStatsScan);
+    propsCache["scanStatsRead"] = JSON.stringify(scanStatsRead);
     Logger.log(`Scan complete in ${new Date().getTime()-scanStartTime}ms`);
+
+    if (new Date().getTime() - scriptStartTime > (durationLimit-getScanInterval())){
+      Logger.log(truncateDictValues(propsCache));
+      PropertiesService.getUserProperties().deleteProperty("scanStats");
+      PropertiesService.getUserProperties().setProperty("scanStatsDate", propsCache["scanStatsDate"]);
+      PropertiesService.getUserProperties().setProperty("scanStatsScan", propsCache["scanStatsScan"]);
+      PropertiesService.getUserProperties().setProperty("scanStatsRead", propsCache["scanStatsRead"]);
+    }
+
     Utilities.sleep(Math.max(1000, getScanInterval() - (new Date().getTime()-scanStartTime)));
   }
 }
@@ -157,7 +209,7 @@ function calculateDailyScans() {
     for (const [period, interval] of Object.entries(SCAN_INTERVAL)) {
         if (period === 'default') continue;
         const { startMin, endMin } = getTimeWindowBoundaries(period);
-        total += Math.ceil((endMin-startMin) * 60000) / interval;
+        total += (endMin-startMin)*60000/SCRIPT_TRIGGER_INTERVAL*Math.ceil(SCRIPT_TRIGGER_INTERVAL / interval);
         for (let t = startMin; t < endMin; t++) {coverage[t % 1440] = true;}
     }
     const missing = coverage.reduce((acc, val, idx) => {
@@ -172,10 +224,18 @@ function calculateDailyScans() {
         if(SCAN_INTERVAL.default){Logger.log(msg);}
         else{throw msg;}
     }
-    if (SCAN_INTERVAL.default) total += Math.ceil((missing.length * 60000) / SCAN_INTERVAL.default);
+    //if (SCAN_INTERVAL.default) total += Math.ceil((missing.length * 60000) / SCAN_INTERVAL.default);
+    if (SCAN_INTERVAL.default) {
+      total += missing.length*60000/SCRIPT_TRIGGER_INTERVAL*Math.ceil(SCRIPT_TRIGGER_INTERVAL/SCAN_INTERVAL.default);}
     return total
 }
 
+function truncateDictValues(dict, length=30) {
+    const truncated = {};
+    for (const key in dict) {
+        if (dict.hasOwnProperty(key)) {truncated[key] = dict[key].toString().slice(0, length);}}
+    return truncated;
+}
 /*const throttle = (func, wait = 100) => {
   let lastExec = 0;
   return (...args) => {
