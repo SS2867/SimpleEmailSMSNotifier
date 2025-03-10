@@ -87,6 +87,7 @@ const CALL_ACCOUNT_PW_KEY = "ywX73q14";
 
 // ====== End of Config ======
 
+
 userProps = PropertiesService.getUserProperties();
 propsCache = userProps.getProperties();
 
@@ -149,16 +150,16 @@ function checkUnreadEmails() {
           scanStatsRead[scanMinute]++;
           
           var subject = message.getSubject();
-          var body = message.getBody();
+          var body = message.getPlainBody();
           var from_ =  message.getFrom();
           var to = message.getTo();
           
           console.log(`Unread email: ${from_} | ${subject.slice(0,40)} | ` +
-            `${body.slice(0,40).replaceAll("\n", "\\n")}`);
+            `\`${body.slice(0,400).replace(/(\r\n|\n|\r)/gm, ' ')}\``);
+          message.markRead();
           if (targetEmailSelector(from_, to, body, subject)){
             targetSelectedAction(from_, subject, body);
           } 
-          message.markRead();
         }
       });
 
@@ -420,7 +421,9 @@ function main(){
 }
 
 function test(){
-  
+  Logger.log(calculateDailyScans())
+  Logger.log(getScanInterval())
+  Logger.log(getScanInterval(new Date("Fri Feb 28 2025 20:20:08 GMT+0800")-0))
 }
 
 
